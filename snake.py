@@ -47,6 +47,10 @@ food_position = None
 
 fps = 10
 
+moves: list[Vector2] = []
+
+is_new_game = True
+
 #region Drawing
 def message(msg, color):
     msg_render = message_font.render(msg, True, color)
@@ -54,9 +58,47 @@ def message(msg, color):
     display.blit(msg_render, msg_rect)
 
 def draw_snake():
-    for part in snake:
+    draw_snake_head()
+
+    for part in snake[:-1]:
         pos_world = local_to_world(part)
         pygame.draw.rect(display, white, pygame.Rect(pos_world.x, pos_world.y, block_size, block_size))
+
+def draw_snake_head():
+    global move_direction, snake
+
+    s = block_size // 4
+    e = (3 * block_size) // 4
+
+    l = s
+    r = e
+    u = s
+    d = e
+
+    if move_direction == Vector2(0, -1): #up
+        eye1 = Vector2(l, u)
+        eye2 = Vector2(r, u)
+    elif move_direction == Vector2(0, 1): #down
+        eye1 = Vector2(l, d)
+        eye2 = Vector2(r, d)
+    if move_direction == Vector2(-1, 0): #left
+        eye1 = Vector2(l, u)
+        eye2 = Vector2(l, d)
+    elif move_direction == Vector2(1, 0): #right
+        eye1 = Vector2(r, u)
+        eye2 = Vector2(r, d)
+    
+
+    eye_radius = block_size // 10
+
+    head_pos = snake[-1]
+    head_pos_world = local_to_world(head_pos)
+    #head
+    pygame.draw.rect(display, white, pygame.Rect(head_pos_world.x, head_pos_world.y, block_size, block_size))
+
+    #eyes
+    pygame.draw.circle(display, black, (head_pos_world.x + eye1.x, head_pos_world.y + eye1.y), eye_radius)
+    pygame.draw.circle(display, black, (head_pos_world.x + eye2.x, head_pos_world.y + eye2.y), eye_radius)
 
 def draw_food():
     global food_position
@@ -105,23 +147,30 @@ start = State(
 
 #region Running
 def running_start():
-    global food_position, snake, move_direction
+    global is_new_game
 
-    snake = [Vector2(0, block_count//2), Vector2(1, block_count//2), Vector2(2, block_count//2)]
-    move_direction = Vector2(1, 0)
+    if is_new_game:
+        global food_position, snake, move_direction
 
-    food_position = generate_food_position()
+        snake = [Vector2(0, block_count//2), Vector2(1, block_count//2), Vector2(2, block_count//2)]
+        move_direction = Vector2(1, 0)
+
+        food_position = generate_food_position()
+
+        moves = []
+
+        is_new_game = False
 
 def running_update():
     global move_direction, food_position, sm, snake, clock, game_over
 
-    inp = None
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             quit_game()
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_p:
                 sm.change_state(paused)
+                return
             if event.key == pygame.K_LEFT:
                 inp = Vector2(-1, 0)
             elif event.key == pygame.K_RIGHT:
@@ -130,9 +179,13 @@ def running_update():
                 inp = Vector2(0, -1)
             elif event.key == pygame.K_DOWN:
                 inp = Vector2(0, 1)
-    
-    if inp is not None and (inp + move_direction != Vector2(0, 0)):
-        move_direction = inp
+            
+            if inp and can_move_in_direction(inp):
+                moves.append(inp)
+
+    if moves:
+        move_direction = moves[0]
+        moves.pop(0)
     
     snake_head = snake[-1]
     future_pos = snake_head + move_direction
@@ -155,6 +208,12 @@ def running_update():
     
     pygame.display.update()
     clock.tick(fps)
+
+def can_move_in_direction(inp: Vector2):
+        if moves:
+            return inp + moves[-1] != Vector2(0, 0)
+        else:
+            return inp + move_direction != Vector2(0, 0)
 
 running = State(
     start=running_start,
@@ -182,22 +241,27 @@ paused = State(
 )
 #endregion
 
+#region Game over
 def game_over_start():
     display.fill(yellow)
     message("You died! Press any key to restart", red)
     pygame.display.update()
 
 def game_over_update():
+    global is_new_game
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             quit_game()
         if event.type == pygame.KEYDOWN:
+            is_new_game = True
             sm.change_state(running)
 
 game_over = State(
     start=game_over_start,
     update=game_over_update
 )
+#endregion
 
 sm = StateMachine(start)
 
