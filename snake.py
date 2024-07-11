@@ -3,9 +3,9 @@ import time
 import random
 from Vector2 import Vector2
 from StateMachine import State, StateMachine
+from Apple import Apple
 
 pygame.init()
-
 
 #region Colors
 white = (255, 255, 255)
@@ -40,16 +40,25 @@ message_font = pygame.font.SysFont("comicsans", 50)
 score_font = pygame.font.SysFont("comicsans", 35)
 #endregion
 
-# snake vars
+#region snake vars
+apples = [
+    Apple(10, red, 1),
+    Apple(1, yellow, 3)
+]
+
 snake = []
 move_direction = None
-food_position = None
+apple_position = None
+current_apple_type: Apple = None
+
+grow_count = None
 
 fps = 10
 
 moves: list[Vector2] = []
 
 is_new_game = True
+#endregion
 
 #region Drawing
 def message(msg, color):
@@ -100,27 +109,43 @@ def draw_snake_head():
     pygame.draw.circle(display, black, (head_pos_world.x + eye1.x, head_pos_world.y + eye1.y), eye_radius)
     pygame.draw.circle(display, black, (head_pos_world.x + eye2.x, head_pos_world.y + eye2.y), eye_radius)
 
-def draw_food():
-    global food_position
+def draw_apple():
+    global apple_position
 
-    pos_world = local_to_world(food_position)
-    pygame.draw.rect(display, yellow, pygame.Rect(pos_world.x, pos_world.y, block_size, block_size))
+    pos_world = local_to_world(apple_position) + Vector2(block_size//2, block_size//2)
+    pygame.draw.circle(display, current_apple_type.color, (pos_world.x, pos_world.y), block_size // 2)
 
 def draw_frame():
     display.fill(blue)
     draw_snake()
-    draw_food()
+    draw_apple()
 #endregion
 
 all_positions = {Vector2(x, y) for x in range(block_count) for y in range(block_count)}
-def generate_food_position():
-    global all_positions, food_position
+def generate_apple_position():
+    global all_positions, apple_position
     
     available_positions = list(all_positions - set(snake))
 
-    food_position = random.choice(available_positions)
+    apple_position = random.choice(available_positions)
     
-    return food_position
+    return apple_position
+
+def pick_apple_type():
+    global apples, current_apple_type
+
+    picked_apple_idx = weighted_random([apple.weight for apple in apples])
+    return apples[picked_apple_idx]
+
+# weighted random
+def weighted_random(weights: list[int]):
+    total = sum(weights)
+    r = random.randint(1, total)
+    
+    for i, weight in enumerate(weights):
+        r -= weight
+        if r <= 0:
+            return i
 
 def quit_game():
     pygame.quit()
@@ -150,19 +175,22 @@ def running_start():
     global is_new_game
 
     if is_new_game:
-        global food_position, snake, move_direction
+        global apple_position, current_apple_type, moves, snake, move_direction, grow_count
 
         snake = [Vector2(0, block_count//2), Vector2(1, block_count//2), Vector2(2, block_count//2)]
         move_direction = Vector2(1, 0)
 
-        food_position = generate_food_position()
+        apple_position = generate_apple_position()
+        current_apple_type = pick_apple_type()
 
         moves = []
+
+        grow_count = 0
 
         is_new_game = False
 
 def running_update():
-    global move_direction, food_position, sm, snake, clock, game_over
+    global move_direction, apple_position, sm, snake, clock, game_over, grow_count, current_apple_type
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -198,8 +226,13 @@ def running_update():
 
     snake.append(snake_head + move_direction)
 
-    if snake[-1] == food_position:
-        food_position = generate_food_position()
+    if snake[-1] == apple_position:
+        apple_position = generate_apple_position()
+        current_apple_type = pick_apple_type()
+        grow_count += current_apple_type.grow_amount
+    
+    if grow_count != 0:
+        grow_count -= 1
     else:
         snake.pop(0)
     
