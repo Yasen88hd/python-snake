@@ -16,6 +16,8 @@ green = (0, 255, 0)
 blue = (50, 153, 213)
 purple = (131, 56, 236)
 gray = (141, 153, 174)
+
+grid_line_color: tuple[int, int, int] | None = gray #if none the grid won't be colored
 #endregion
 
 #region Grid
@@ -63,8 +65,6 @@ grow_count = None
 fps = 10
 
 moves: list[Vector2] = []
-
-is_new_game = True
 #endregion
 
 #region Drawing
@@ -74,7 +74,11 @@ def message(msg, color):
     display.blit(msg_render, msg_rect)
 
 def draw_grid():
-    global display, grid_line_size, grid_line_offset
+    global display, grid_line_size, grid_line_offset, grid_line_color
+
+    if grid_line_color is not None:
+        return
+
     for x in range(grid_line_offset, screen_width, block_size + grid_line_size):
         pygame.draw.line(display, gray, (x, 0), (x, screen_height), width=grid_line_size)
     
@@ -166,10 +170,26 @@ def quit_game():
     pygame.quit()
     quit()
 
+#sets variables to what they need to be for a new game
+def config_new_game():
+    global apple_position, current_apple_type, moves, snake, move_direction, grow_count, block_count
+
+    snake = [Vector2(0, block_count//2), Vector2(1, block_count//2), Vector2(2, block_count//2)]
+    move_direction = Vector2(1, 0)
+
+    apple_position = generate_apple_position()
+    current_apple_type = pick_apple_type()
+
+    moves = []
+
+    grow_count = 0
+
 #region Start
 def start_start():
-    display.fill(yellow)
-    message("Press any key to start", red)
+    config_new_game()
+    draw_frame()
+    
+    message("Press movement key to start", red)
     pygame.display.update()
 
 def start_update():
@@ -177,7 +197,20 @@ def start_update():
         if event.type == pygame.QUIT:
             quit_game()
         if event.type == pygame.KEYDOWN:
-            sm.change_state(running)
+            inp = None
+            if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                inp = Vector2(-1, 0)
+            elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                inp = Vector2(1, 0)
+            elif event.key == pygame.K_UP or event.key == pygame.K_w:
+                inp = Vector2(0, -1)
+            elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                inp = Vector2(0, 1)
+            
+            if inp is not None and can_move_in_direction(inp):
+                moves.append(inp)
+                sm.change_state(running)
+                clock.tick(fps)
 
 start = State(
     start=start_start,
@@ -186,24 +219,6 @@ start = State(
 #endregion
 
 #region Running
-def running_start():
-    global is_new_game
-
-    if is_new_game:
-        global apple_position, current_apple_type, moves, snake, move_direction, grow_count
-
-        snake = [Vector2(0, block_count//2), Vector2(1, block_count//2), Vector2(2, block_count//2)]
-        move_direction = Vector2(1, 0)
-
-        apple_position = generate_apple_position()
-        current_apple_type = pick_apple_type()
-
-        moves = []
-
-        grow_count = 0
-
-        is_new_game = False
-
 def running_update():
     global move_direction, apple_position, sm, snake, clock, game_over, grow_count, current_apple_type
 
@@ -266,7 +281,6 @@ def can_move_in_direction(inp: Vector2):
             return inp + move_direction != Vector2(0, 0)
 
 running = State(
-    start=running_start,
     update=running_update
 )
 #endregion
@@ -298,14 +312,12 @@ def game_over_start():
     pygame.display.update()
 
 def game_over_update():
-    global is_new_game
-
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             quit_game()
         if event.type == pygame.KEYDOWN:
-            is_new_game = True
-            sm.change_state(running)
+            config_new_game()
+            sm.change_state(start)
 
 game_over = State(
     start=game_over_start,
