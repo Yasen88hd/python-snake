@@ -14,18 +14,24 @@ black = (0, 0, 0)
 red = (213, 50, 80)
 green = (0, 255, 0)
 blue = (50, 153, 213)
+purple = (131, 56, 236)
+gray = (141, 153, 174)
 #endregion
 
 #region Grid
-block_size = 40
-block_count = 20
+block_size = 50
+block_count = 16
+grid_line_size = 4
+
+#grid_line_offset = grid_line_size // 2 #offset because lines are drawn from the center of a point
+grid_line_offset = 0 if grid_line_size == 0 else (grid_line_size - 1) // 2
 
 def local_to_world(pos_loc: Vector2):
-    return pos_loc * block_size
+    return pos_loc * (block_size + grid_line_size) + Vector2(1, 1) * grid_line_size
 #endregion
 
 #region Create display
-screen_width = block_size * block_count
+screen_width = block_size * block_count + grid_line_size * (block_count + 1)
 screen_height = screen_width
 
 display = pygame.display.set_mode((screen_width, screen_height))
@@ -42,8 +48,9 @@ score_font = pygame.font.SysFont("comicsans", 35)
 
 #region snake vars
 apples = [
-    Apple(10, red, 1),
-    Apple(1, yellow, 3)
+    Apple(50, red, 1),
+    Apple(15, yellow, 3),
+    Apple(1, purple, 6)
 ]
 
 snake = []
@@ -65,6 +72,14 @@ def message(msg, color):
     msg_render = message_font.render(msg, True, color)
     msg_rect = msg_render.get_rect(center=(screen_width/2, screen_height/2))
     display.blit(msg_render, msg_rect)
+
+def draw_grid():
+    global display, grid_line_size, grid_line_offset
+    for x in range(grid_line_offset, screen_width, block_size + grid_line_size):
+        pygame.draw.line(display, gray, (x, 0), (x, screen_height), width=grid_line_size)
+    
+    for y in range(grid_line_offset, screen_height, block_size + grid_line_size):
+        pygame.draw.line(display, gray, (0, y), (screen_width, y), width=grid_line_size)
 
 def draw_snake():
     draw_snake_head()
@@ -112,11 +127,12 @@ def draw_snake_head():
 def draw_apple():
     global apple_position
 
-    pos_world = local_to_world(apple_position) + Vector2(block_size//2, block_size//2)
-    pygame.draw.circle(display, current_apple_type.color, (pos_world.x, pos_world.y), block_size // 2)
+    pos_world = local_to_world(apple_position)
+    pygame.draw.rect(display, current_apple_type.color, (pos_world.x, pos_world.y, block_size, block_size))
 
 def draw_frame():
     display.fill(blue)
+    draw_grid()
     draw_snake()
     draw_apple()
 #endregion
@@ -137,7 +153,6 @@ def pick_apple_type():
     picked_apple_idx = weighted_random([apple.weight for apple in apples])
     return apples[picked_apple_idx]
 
-# weighted random
 def weighted_random(weights: list[int]):
     total = sum(weights)
     r = random.randint(1, total)
@@ -199,16 +214,18 @@ def running_update():
             if event.key == pygame.K_p:
                 sm.change_state(paused)
                 return
-            if event.key == pygame.K_LEFT:
+            
+            inp = None
+            if event.key == pygame.K_LEFT or event.key == pygame.K_a:
                 inp = Vector2(-1, 0)
-            elif event.key == pygame.K_RIGHT:
+            elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
                 inp = Vector2(1, 0)
-            elif event.key == pygame.K_UP:
+            elif event.key == pygame.K_UP or event.key == pygame.K_w:
                 inp = Vector2(0, -1)
-            elif event.key == pygame.K_DOWN:
+            elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
                 inp = Vector2(0, 1)
             
-            if inp and can_move_in_direction(inp):
+            if inp is not None and can_move_in_direction(inp):
                 moves.append(inp)
 
     if moves:
